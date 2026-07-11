@@ -1,5 +1,6 @@
 .superpowers/
 .DS_Store
 node_modules/
+dist/
 *.local
 .worktrees/
