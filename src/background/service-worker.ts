@@ -3,6 +3,10 @@ import { flattenBookmarks } from '../lib/flatten-bookmarks'
 import { searchBookmarks } from '../lib/local-search'
 import { mergeLocalAndAi } from '../lib/merge-results'
 import { openOrActivateUrl } from '../lib/open-bookmark'
+import {
+  excludeByFolderKeywords,
+  parseSearchQuery,
+} from '../lib/parse-query'
 import { selectAiCandidates } from '../lib/select-ai-candidates'
 import { chromeLocalStorage, getSettings, saveSettings } from '../lib/settings'
 import type { BookmarkItem, SearchHit, Settings } from '../lib/types'
@@ -64,13 +68,30 @@ export async function openOverlayWindow(): Promise<void> {
   overlayWindowId = window?.id
 }
 
+function searchLocalWithExclusions(
+  query: string,
+  limit?: number,
+): { hits: SearchHit[]; excludeFolderKeywords: string[]; searchText: string } {
+  const parsed = parseSearchQuery(query)
+  const pool = excludeByFolderKeywords(
+    bookmarkCache,
+    parsed.excludeFolderKeywords,
+  )
+  const searchText = parsed.searchText || parsed.raw
+  return {
+    hits: searchBookmarks(pool, searchText, limit),
+    excludeFolderKeywords: parsed.excludeFolderKeywords,
+    searchText,
+  }
+}
+
 async function handleMessage(message: RuntimeMessage): Promise<unknown> {
   await ensureBookmarkCache()
 
   switch (message.type) {
     case 'SEARCH_LOCAL':
       return {
-        hits: searchBookmarks(bookmarkCache, message.query, message.limit),
+        hits: searchLocalWithExclusions(message.query, message.limit).hits,
       }
 
     case 'SEARCH_AI': {
@@ -78,18 +99,35 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
       if (!settings.apiKey) return { skipped: true }
 
       try {
+        const parsed = parseSearchQuery(message.query)
+        const pool = excludeByFolderKeywords(
+          bookmarkCache,
+          parsed.excludeFolderKeywords,
+        )
+        const searchText = parsed.searchText || parsed.raw
         const localHits =
-          message.localHits ??
-          searchBookmarks(bookmarkCache, message.query, message.limit)
-        const candidates = selectAiCandidates(bookmarkCache, localHits)
+          message.localHits?.length
+            ? excludeByFolderKeywords(
+                message.localHits,
+                parsed.excludeFolderKeywords,
+              ).map((b) => ({
+                ...b,
+                source: 'local' as const,
+              }))
+            : searchBookmarks(pool, searchText, message.limit)
+        const candidates = selectAiCandidates(pool, localHits)
         const ids = await matchBookmarksWithDeepSeek({
           apiKey: settings.apiKey,
           model: settings.model,
-          query: message.query,
+          query: searchText,
           bookmarks: candidates,
+          excludeFolderKeywords: parsed.excludeFolderKeywords,
         })
+        const safeIds = ids.filter((id) =>
+          pool.some((bookmark) => bookmark.id === id),
+        )
         // Return merged hits so the overlay can render Task 9 results directly.
-        return { hits: mergeLocalAndAi(bookmarkCache, localHits, ids) }
+        return { hits: mergeLocalAndAi(pool, localHits, safeIds) }
       } catch (error) {
         return {
           error: error instanceof Error ? error.message : String(error),

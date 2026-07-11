@@ -36,6 +36,12 @@ describe('buildMatchPrompt', () => {
     expect(user).toContain('页面卡')
     expect(user).toContain('"id":"10"')
   })
+
+  it('includes folder exclusion instructions', () => {
+    const { system, user } = buildMatchPrompt('页面卡', bookmarks, ['voov'])
+    expect(system).toContain('排除')
+    expect(user).toContain('voov')
+  })
 })
 
 describe('matchBookmarksWithDeepSeek', () => {
