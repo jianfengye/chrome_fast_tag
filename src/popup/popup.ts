@@ -11,6 +11,16 @@ const testBtn = document.getElementById('test-connection') as HTMLButtonElement
 const openSearchBtn = document.getElementById('open-search') as HTMLButtonElement
 const statusEl = document.getElementById('status') as HTMLDivElement
 
+let savedSettings: Settings | null = null
+
+function isFormDirty(): boolean {
+  if (!savedSettings) return false
+  return (
+    apiKeyInput.value.trim() !== savedSettings.apiKey ||
+    modelInput.value.trim() !== (savedSettings.model || 'deepseek-chat')
+  )
+}
+
 function showStatus(message: string, type: 'success' | 'error'): void {
   statusEl.textContent = message
   statusEl.className = `status status-${type}`
@@ -33,6 +43,7 @@ async function loadSettings(): Promise<void> {
     return
   }
 
+  savedSettings = response.settings
   apiKeyInput.value = response.settings.apiKey
   modelInput.value = response.settings.model || 'deepseek-chat'
 }
@@ -53,6 +64,7 @@ async function handleSave(): Promise<void> {
       return
     }
 
+    savedSettings = response.settings
     showStatus('设置已保存', 'success')
   } catch (error) {
     showStatus(error instanceof Error ? error.message : String(error), 'error')
@@ -62,6 +74,11 @@ async function handleSave(): Promise<void> {
 }
 
 async function handleTest(): Promise<void> {
+  if (isFormDirty()) {
+    showStatus('请先保存设置后再测试连接', 'error')
+    return
+  }
+
   clearStatus()
   testBtn.disabled = true
 

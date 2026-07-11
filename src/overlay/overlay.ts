@@ -19,6 +19,7 @@ const emptyState = document.getElementById('empty-state') as HTMLDivElement
 let hits: SearchHit[] = []
 let selectedIndex = -1
 let aiStatus: AiStatus = ''
+let localSearchRequestId = 0
 let aiRequestId = 0
 let debounceTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -137,13 +138,17 @@ async function runSearch(query: string): Promise<void> {
   if (!trimmed) {
     hits = []
     selectedIndex = -1
+    localSearchRequestId++
     aiRequestId++
     setAiStatus('')
     renderResults()
     return
   }
 
+  const localRequestId = ++localSearchRequestId
   const localHits = await searchLocal(trimmed)
+  if (localRequestId !== localSearchRequestId) return
+
   setHits(localHits)
 
   const requestId = ++aiRequestId
@@ -182,6 +187,18 @@ async function openSelected(forceNew: boolean): Promise<void> {
     window.close()
   }
 }
+
+resultsList.addEventListener('click', (event) => {
+  const item = (event.target as HTMLElement).closest('.result-item') as HTMLElement | null
+  if (!item) return
+
+  const index = Number(item.dataset.index)
+  if (Number.isNaN(index) || index < 0 || index >= hits.length) return
+
+  selectedIndex = index
+  renderResults()
+  void openSelected(false)
+})
 
 searchInput.addEventListener('input', scheduleSearch)
 
