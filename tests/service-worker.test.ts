@@ -26,6 +26,7 @@ function createChromeMock() {
   const bookmarksOnChanged = makeEvent<() => void>()
   const bookmarksOnMoved = makeEvent<() => void>()
   const commandsOnCommand = makeEvent<(command: string) => void>()
+  const windowsOnRemoved = makeEvent<(windowId: number) => void>()
 
   const chromeMock = {
     runtime: {
@@ -83,6 +84,7 @@ function createChromeMock() {
       getCurrent: vi.fn().mockResolvedValue({ id: 9, focused: true }),
       create: vi.fn().mockResolvedValue({ id: 9 }),
       update: vi.fn().mockResolvedValue(undefined),
+      onRemoved: windowsOnRemoved,
     },
   }
 
@@ -188,6 +190,37 @@ describe('background service worker', () => {
     expect(response).toEqual({ skipped: true })
   })
 
+  it('saves top-level settings fields from the planned message shape', async () => {
+    const response = await sendRuntimeMessage(chromeMock, {
+      type: 'SAVE_SETTINGS',
+      apiKey: 'sk-next',
+      model: 'deepseek-reasoner',
+    })
+
+    expect(chromeMock.storage.local.set).toHaveBeenCalledWith({
+      fastTagSettings: {
+        apiKey: 'sk-next',
+        model: 'deepseek-reasoner',
+      },
+    })
+    expect(response).toEqual({
+      settings: {
+        apiKey: 'sk-next',
+        model: 'deepseek-reasoner',
+      },
+    })
+  })
+
+  it('responds with an error when async message handling rejects', async () => {
+    chromeMock.storage.local.get.mockRejectedValueOnce(new Error('storage down'))
+
+    const response = await sendRuntimeMessage(chromeMock, {
+      type: 'GET_SETTINGS',
+    })
+
+    expect(response).toEqual({ error: 'storage down' })
+  })
+
   it('opens the overlay from runtime message and keyboard command', async () => {
     await sendRuntimeMessage(chromeMock, { type: 'OPEN_OVERLAY' })
     chromeMock.commands.onCommand.listeners[0]('open-search')
@@ -202,5 +235,14 @@ describe('background service worker', () => {
     })
     expect(chromeMock.windows.update).toHaveBeenCalledWith(9, { focused: true })
     expect(chromeMock.runtime.getURL).toHaveBeenCalledWith('src/overlay/overlay.html')
+  })
+
+  it('clears the overlay window id when the popup window is removed', async () => {
+    await sendRuntimeMessage(chromeMock, { type: 'OPEN_OVERLAY' })
+
+    chromeMock.windows.onRemoved.listeners[0](9)
+    await sendRuntimeMessage(chromeMock, { type: 'OPEN_OVERLAY' })
+
+    expect(chromeMock.windows.create).toHaveBeenCalledTimes(2)
   })
 })

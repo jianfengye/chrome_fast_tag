@@ -12,7 +12,12 @@ type RuntimeMessage =
   | { type: 'SEARCH_AI'; query: string; localHits?: SearchHit[]; limit?: number }
   | { type: 'OPEN_BOOKMARK'; url: string; forceNew?: boolean }
   | { type: 'GET_SETTINGS' }
-  | { type: 'SAVE_SETTINGS'; settings: Partial<Settings> }
+  | {
+      type: 'SAVE_SETTINGS'
+      apiKey?: string
+      model?: string
+      settings?: Partial<Settings>
+    }
   | { type: 'TEST_CONNECTION'; settings?: Partial<Settings> }
   | { type: 'OPEN_OVERLAY' }
 
@@ -83,6 +88,7 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
           query: message.query,
           bookmarks: candidates,
         })
+        // Return merged hits so the overlay can render Task 9 results directly.
         return { hits: mergeLocalAndAi(bookmarkCache, localHits, ids) }
       } catch (error) {
         return {
@@ -98,10 +104,16 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
     case 'GET_SETTINGS':
       return { settings: await getSettings(chromeLocalStorage()) }
 
-    case 'SAVE_SETTINGS':
-      return {
-        settings: await saveSettings(chromeLocalStorage(), message.settings),
+    case 'SAVE_SETTINGS': {
+      const patch = {
+        ...message.settings,
+        ...(message.apiKey != null ? { apiKey: message.apiKey } : {}),
+        ...(message.model != null ? { model: message.model } : {}),
       }
+      return {
+        settings: await saveSettings(chromeLocalStorage(), patch),
+      }
+    }
 
     case 'TEST_CONNECTION': {
       const current = await getSettings(chromeLocalStorage())
@@ -145,8 +157,18 @@ chrome.commands.onCommand.addListener((command) => {
   }
 })
 
+chrome.windows.onRemoved.addListener((windowId) => {
+  if (windowId === overlayWindowId) {
+    overlayWindowId = undefined
+  }
+})
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  void handleMessage(message as RuntimeMessage).then(sendResponse)
+  void handleMessage(message as RuntimeMessage)
+    .then(sendResponse)
+    .catch((e) => {
+      sendResponse({ error: e instanceof Error ? e.message : String(e) })
+    })
   return true
 })
 
