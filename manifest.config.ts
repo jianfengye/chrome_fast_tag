@@ -6,11 +6,18 @@ export default defineManifest({
   version: '0.1.0',
   description: '本地模糊 + DeepSeek 语义联想，快速定位书签',
   icons: {
+    '16': 'public/icons/icon16.png',
+    '48': 'public/icons/icon48.png',
     '128': 'public/icons/icon128.png',
   },
   action: {
     default_popup: 'src/popup/popup.html',
     default_title: 'Fast Tag',
+    default_icon: {
+      '16': 'public/icons/icon16.png',
+      '48': 'public/icons/icon48.png',
+      '128': 'public/icons/icon128.png',
+    },
   },
   background: {
     service_worker: 'src/background/service-worker.ts',
