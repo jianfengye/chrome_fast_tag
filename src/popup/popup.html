@@ -3,9 +3,44 @@
   <head>
     <meta charset="UTF-8" />
     <title>Fast Tag</title>
+    <link rel="stylesheet" href="./popup.css" />
   </head>
   <body>
-    <div id="app">popup</div>
+    <div class="popup">
+      <header class="header">
+        <h1 class="title">Fast Tag</h1>
+        <button type="button" id="open-search" class="btn btn-primary">打开搜索</button>
+      </header>
+
+      <form class="form" id="settings-form" autocomplete="off">
+        <label class="field">
+          <span class="label">API Key</span>
+          <input type="password" id="api-key" name="apiKey" placeholder="sk-..." />
+        </label>
+
+        <label class="field">
+          <span class="label">模型</span>
+          <input type="text" id="model" name="model" value="deepseek-chat" />
+        </label>
+
+        <div class="actions">
+          <button type="button" id="save-settings" class="btn">保存</button>
+          <button type="button" id="test-connection" class="btn btn-secondary">
+            测试连接
+          </button>
+        </div>
+      </form>
+
+      <div id="status" class="status" hidden></div>
+
+      <p class="shortcut-hint">
+        快捷键：<kbd>⌘⇧K</kbd>（Mac）/ <kbd>Ctrl⇧K</kbd>（Windows）
+        <br />
+        自定义快捷键：在浏览器地址栏输入
+        <code>chrome://extensions/shortcuts</code>
+        打开设置页
+      </p>
+    </div>
     <script type="module" src="./popup.ts"></script>
   </body>
 </html>
