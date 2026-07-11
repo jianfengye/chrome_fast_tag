@@ -18,6 +18,12 @@ export default defineManifest({
   },
   permissions: ['bookmarks', 'tabs', 'storage', 'windows'],
   host_permissions: ['https://api.deepseek.com/*'],
+  web_accessible_resources: [
+    {
+      resources: ['src/overlay/overlay.html'],
+      matches: ['<all_urls>'],
+    },
+  ],
   commands: {
     'open-search': {
       suggested_key: {
