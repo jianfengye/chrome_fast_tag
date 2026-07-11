@@ -9,12 +9,18 @@ import {
 } from '../lib/parse-query'
 import { selectAiCandidates } from '../lib/select-ai-candidates'
 import { chromeLocalStorage, getSettings, saveSettings } from '../lib/settings'
+import { getUsageStats, recordBookmarkOpen } from '../lib/usage-stats'
 import type { BookmarkItem, SearchHit, Settings } from '../lib/types'
 
 type RuntimeMessage =
   | { type: 'SEARCH_LOCAL'; query: string; limit?: number }
   | { type: 'SEARCH_AI'; query: string; localHits?: SearchHit[]; limit?: number }
-  | { type: 'OPEN_BOOKMARK'; url: string; forceNew?: boolean }
+  | {
+      type: 'OPEN_BOOKMARK'
+      url: string
+      forceNew?: boolean
+      bookmarkId?: string
+    }
   | { type: 'GET_SETTINGS' }
   | {
       type: 'SAVE_SETTINGS'
@@ -68,18 +74,23 @@ export async function openOverlayWindow(): Promise<void> {
   overlayWindowId = window?.id
 }
 
-function searchLocalWithExclusions(
+async function searchLocalWithExclusions(
   query: string,
   limit?: number,
-): { hits: SearchHit[]; excludeFolderKeywords: string[]; searchText: string } {
+): Promise<{
+  hits: SearchHit[]
+  excludeFolderKeywords: string[]
+  searchText: string
+}> {
   const parsed = parseSearchQuery(query)
   const pool = excludeByFolderKeywords(
     bookmarkCache,
     parsed.excludeFolderKeywords,
   )
   const searchText = parsed.searchText || parsed.raw
+  const usageById = await getUsageStats(chromeLocalStorage())
   return {
-    hits: searchBookmarks(pool, searchText, limit),
+    hits: searchBookmarks(pool, searchText, limit, usageById),
     excludeFolderKeywords: parsed.excludeFolderKeywords,
     searchText,
   }
@@ -91,7 +102,8 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
   switch (message.type) {
     case 'SEARCH_LOCAL':
       return {
-        hits: searchLocalWithExclusions(message.query, message.limit).hits,
+        hits: (await searchLocalWithExclusions(message.query, message.limit))
+          .hits,
       }
 
     case 'SEARCH_AI': {
@@ -105,6 +117,7 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
           parsed.excludeFolderKeywords,
         )
         const searchText = parsed.searchText || parsed.raw
+        const usageById = await getUsageStats(chromeLocalStorage())
         const localHits =
           message.localHits?.length
             ? excludeByFolderKeywords(
@@ -114,7 +127,7 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
                 ...b,
                 source: 'local' as const,
               }))
-            : searchBookmarks(pool, searchText, message.limit)
+            : searchBookmarks(pool, searchText, message.limit, usageById)
         const candidates = selectAiCandidates(pool, localHits)
         const ids = await matchBookmarksWithDeepSeek({
           apiKey: settings.apiKey,
@@ -126,8 +139,12 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
         const safeIds = ids.filter((id) =>
           pool.some((bookmark) => bookmark.id === id),
         )
-        // Return merged hits so the overlay can render Task 9 results directly.
-        return { hits: mergeLocalAndAi(pool, localHits, safeIds) }
+        return {
+          hits: mergeLocalAndAi(pool, localHits, safeIds, {
+            query: searchText,
+            usageById,
+          }),
+        }
       } catch (error) {
         return {
           error: error instanceof Error ? error.message : String(error),
@@ -136,6 +153,9 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
     }
 
     case 'OPEN_BOOKMARK':
+      if (message.bookmarkId) {
+        await recordBookmarkOpen(chromeLocalStorage(), message.bookmarkId)
+      }
       await openOrActivateUrl(message.url, message.forceNew)
       return { ok: true }
 

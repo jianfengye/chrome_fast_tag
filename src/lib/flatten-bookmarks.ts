@@ -4,6 +4,7 @@ export type BookmarkNode = {
   id: string
   title: string
   url?: string
+  dateAdded?: number
   children?: BookmarkNode[]
 }
 
@@ -24,6 +25,7 @@ export function flattenBookmarks(root: BookmarkNode): BookmarkItem[] {
       title: node.title || node.url,
       url: node.url,
       folderPath: pathParts.join(' / '),
+      dateAdded: node.dateAdded,
     })
   }
 

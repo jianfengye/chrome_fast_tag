@@ -74,6 +74,13 @@ function renderResults(): void {
       li.appendChild(badge)
     }
 
+    if (hit.recentlyUsed) {
+      const badge = document.createElement('span')
+      badge.className = 'recent-badge'
+      badge.textContent = '最近'
+      li.appendChild(badge)
+    }
+
     resultsList.appendChild(li)
   }
 
@@ -180,6 +187,7 @@ async function openSelected(forceNew: boolean): Promise<void> {
   const response = (await chrome.runtime.sendMessage({
     type: 'OPEN_BOOKMARK',
     url: hit.url,
+    bookmarkId: hit.id,
     forceNew,
   })) as OpenBookmarkResponse
 
