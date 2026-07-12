@@ -82,6 +82,13 @@ function createChromeMock() {
     },
     windows: {
       getCurrent: vi.fn().mockResolvedValue({ id: 9, focused: true }),
+      getLastFocused: vi.fn().mockResolvedValue({
+        id: 1,
+        left: 100,
+        top: 50,
+        width: 1400,
+        height: 900,
+      }),
       create: vi.fn().mockResolvedValue({ id: 9 }),
       update: vi.fn().mockResolvedValue(undefined),
       onRemoved: windowsOnRemoved,
@@ -225,15 +232,25 @@ describe('background service worker', () => {
     await sendRuntimeMessage(chromeMock, { type: 'OPEN_OVERLAY' })
     chromeMock.commands.onCommand.listeners[0]('open-search')
     await Promise.resolve()
+    await Promise.resolve()
 
+    // left = 100 + (1400-720)/2 = 440, top = 50 + (900-380)/3 = 223
     expect(chromeMock.windows.create).toHaveBeenCalledWith({
       url: 'chrome-extension://id/src/overlay/overlay.html',
       type: 'popup',
-      width: 640,
-      height: 520,
+      width: 720,
+      height: 380,
+      left: 440,
+      top: 223,
       focused: true,
     })
-    expect(chromeMock.windows.update).toHaveBeenCalledWith(9, { focused: true })
+    expect(chromeMock.windows.update).toHaveBeenCalledWith(9, {
+      focused: true,
+      left: 440,
+      top: 223,
+      width: 720,
+      height: 380,
+    })
     expect(chromeMock.runtime.getURL).toHaveBeenCalledWith('src/overlay/overlay.html')
   })
 

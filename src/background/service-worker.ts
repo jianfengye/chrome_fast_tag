@@ -32,8 +32,9 @@ type RuntimeMessage =
   | { type: 'OPEN_OVERLAY' }
 
 const OVERLAY_PATH = 'src/overlay/overlay.html'
-const OVERLAY_WIDTH = 640
-const OVERLAY_HEIGHT = 520
+/** 长条命令面板：宽而扁，相对当前浏览器窗口居中偏上 */
+const OVERLAY_WIDTH = 720
+const OVERLAY_HEIGHT = 380
 
 let bookmarkCache: BookmarkItem[] = []
 let refreshPromise: Promise<void> | undefined
@@ -52,12 +53,46 @@ async function ensureBookmarkCache(): Promise<void> {
   }
 }
 
+async function getCenteredOverlayBounds(): Promise<{
+  left: number
+  top: number
+  width: number
+  height: number
+}> {
+  const width = OVERLAY_WIDTH
+  const height = OVERLAY_HEIGHT
+
+  try {
+    const host = await chrome.windows.getLastFocused()
+    const hostLeft = host.left ?? 0
+    const hostTop = host.top ?? 0
+    const hostWidth = host.width ?? width
+    const hostHeight = host.height ?? height
+    return {
+      width,
+      height,
+      left: Math.max(0, Math.round(hostLeft + (hostWidth - width) / 2)),
+      // 略偏上，更像 Spotlight / Raycast
+      top: Math.max(0, Math.round(hostTop + (hostHeight - height) / 3)),
+    }
+  } catch {
+    return { left: 200, top: 160, width, height }
+  }
+}
+
 export async function openOverlayWindow(): Promise<void> {
   const url = chrome.runtime.getURL(OVERLAY_PATH)
+  const bounds = await getCenteredOverlayBounds()
 
   if (overlayWindowId != null) {
     try {
-      await chrome.windows.update(overlayWindowId, { focused: true })
+      await chrome.windows.update(overlayWindowId, {
+        focused: true,
+        left: bounds.left,
+        top: bounds.top,
+        width: bounds.width,
+        height: bounds.height,
+      })
       return
     } catch {
       overlayWindowId = undefined
@@ -67,8 +102,10 @@ export async function openOverlayWindow(): Promise<void> {
   const window = await chrome.windows.create({
     url,
     type: 'popup',
-    width: OVERLAY_WIDTH,
-    height: OVERLAY_HEIGHT,
+    width: bounds.width,
+    height: bounds.height,
+    left: bounds.left,
+    top: bounds.top,
     focused: true,
   })
   overlayWindowId = window?.id
