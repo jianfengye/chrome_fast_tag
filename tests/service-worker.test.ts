@@ -208,12 +208,14 @@ describe('background service worker', () => {
       fastTagSettings: {
         apiKey: 'sk-next',
         model: 'deepseek-reasoner',
+        aiChatUrl: 'https://chat.deepseek.com/',
       },
     })
     expect(response).toEqual({
       settings: {
         apiKey: 'sk-next',
         model: 'deepseek-reasoner',
+        aiChatUrl: 'https://chat.deepseek.com/',
       },
     })
   })

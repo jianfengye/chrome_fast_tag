@@ -6,6 +6,7 @@ type ErrorResponse = { error: string }
 
 const apiKeyInput = document.getElementById('api-key') as HTMLInputElement
 const modelInput = document.getElementById('model') as HTMLInputElement
+const aiChatUrlInput = document.getElementById('ai-chat-url') as HTMLInputElement
 const saveBtn = document.getElementById('save-settings') as HTMLButtonElement
 const testBtn = document.getElementById('test-connection') as HTMLButtonElement
 const openSearchBtn = document.getElementById('open-search') as HTMLButtonElement
@@ -17,7 +18,9 @@ function isFormDirty(): boolean {
   if (!savedSettings) return false
   return (
     apiKeyInput.value.trim() !== savedSettings.apiKey ||
-    modelInput.value.trim() !== (savedSettings.model || 'deepseek-chat')
+    modelInput.value.trim() !== (savedSettings.model || 'deepseek-chat') ||
+    aiChatUrlInput.value.trim() !==
+      (savedSettings.aiChatUrl || 'https://chat.deepseek.com/')
   )
 }
 
@@ -46,6 +49,8 @@ async function loadSettings(): Promise<void> {
   savedSettings = response.settings
   apiKeyInput.value = response.settings.apiKey
   modelInput.value = response.settings.model || 'deepseek-chat'
+  aiChatUrlInput.value =
+    response.settings.aiChatUrl || 'https://chat.deepseek.com/'
 }
 
 async function handleSave(): Promise<void> {
@@ -57,6 +62,8 @@ async function handleSave(): Promise<void> {
       type: 'SAVE_SETTINGS',
       apiKey: apiKeyInput.value.trim(),
       model: modelInput.value.trim() || 'deepseek-chat',
+      aiChatUrl:
+        aiChatUrlInput.value.trim() || 'https://chat.deepseek.com/',
     })) as SettingsResponse | ErrorResponse
 
     if ('error' in response) {

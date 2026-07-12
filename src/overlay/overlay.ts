@@ -1,13 +1,18 @@
 import type { SearchHit } from '../lib/types'
+import { isAskQuery } from '../lib/ask-mode'
 
 type LocalSearchResponse = { hits: SearchHit[] }
 type AiSearchResponse =
   | { hits: SearchHit[] }
   | { skipped: true }
   | { error: string }
+type RecommendResponse =
+  | { hits: SearchHit[]; openedChat?: boolean }
+  | { skipped: true }
+  | { error: string }
 type OpenBookmarkResponse = { ok: true } | { error: string }
 
-type AiStatus = 'loading' | 'skipped' | 'error' | ''
+type AiStatus = 'loading' | 'skipped' | 'error' | 'recommend' | ''
 
 const DEBOUNCE_MS = 300
 
@@ -21,6 +26,7 @@ let selectedIndex = -1
 let aiStatus: AiStatus = ''
 let localSearchRequestId = 0
 let aiRequestId = 0
+let recommendRequestId = 0
 let debounceTimer: ReturnType<typeof setTimeout> | undefined
 
 function setAiStatus(status: AiStatus): void {
@@ -28,16 +34,47 @@ function setAiStatus(status: AiStatus): void {
   if (status === 'loading') {
     statusLine.textContent = 'AI 联想中…'
     statusLine.hidden = false
+  } else if (status === 'recommend') {
+    statusLine.textContent = 'AI 推荐网站中…'
+    statusLine.hidden = false
   } else if (status === 'error') {
     statusLine.textContent = 'AI 暂不可用'
     statusLine.hidden = false
   } else if (status === 'skipped') {
-    statusLine.textContent = '未配置 Key'
+    statusLine.textContent = '未配置 Key（荐站/联想需 API Key）'
     statusLine.hidden = false
   } else {
     statusLine.textContent = ''
     statusLine.hidden = true
   }
+}
+
+function sourceBadge(hit: SearchHit): HTMLSpanElement | null {
+  if (hit.source === 'ai') {
+    const badge = document.createElement('span')
+    badge.className = 'ai-badge'
+    badge.textContent = 'AI'
+    return badge
+  }
+  if (hit.source === 'web') {
+    const badge = document.createElement('span')
+    badge.className = 'web-badge'
+    badge.textContent = '荐站'
+    return badge
+  }
+  if (hit.source === 'chat') {
+    const badge = document.createElement('span')
+    badge.className = 'chat-badge'
+    badge.textContent = '对话'
+    return badge
+  }
+  if (hit.recentlyUsed) {
+    const badge = document.createElement('span')
+    badge.className = 'recent-badge'
+    badge.textContent = '最近'
+    return badge
+  }
+  return null
 }
 
 function renderResults(): void {
@@ -67,25 +104,25 @@ function renderResults(): void {
     body.append(title, folder, url)
     li.appendChild(body)
 
-    if (hit.source === 'ai') {
-      const badge = document.createElement('span')
-      badge.className = 'ai-badge'
-      badge.textContent = 'AI'
-      li.appendChild(badge)
-    }
+    const badge = sourceBadge(hit)
+    if (badge) li.appendChild(badge)
 
-    if (hit.recentlyUsed) {
-      const badge = document.createElement('span')
-      badge.className = 'recent-badge'
-      badge.textContent = '最近'
-      li.appendChild(badge)
+    if (hit.source === 'ai' && hit.recentlyUsed) {
+      const recent = document.createElement('span')
+      recent.className = 'recent-badge'
+      recent.textContent = '最近'
+      li.appendChild(recent)
     }
 
     resultsList.appendChild(li)
   }
 
   const query = searchInput.value.trim()
-  const showEmpty = query.length > 0 && hits.length === 0 && aiStatus !== 'loading'
+  const showEmpty =
+    query.length > 0 &&
+    hits.length === 0 &&
+    aiStatus !== 'loading' &&
+    aiStatus !== 'recommend'
   emptyState.hidden = !showEmpty
 
   if (selectedIndex >= 0) {
@@ -139,6 +176,41 @@ async function searchAi(
   }
 }
 
+async function runWebRecommend(query: string): Promise<void> {
+  const requestId = ++recommendRequestId
+  setHits([])
+  setAiStatus('recommend')
+
+  const response = (await chrome.runtime.sendMessage({
+    type: 'RECOMMEND_WEB',
+    query,
+  })) as RecommendResponse
+
+  if (requestId !== recommendRequestId) return
+
+  if ('skipped' in response && response.skipped) {
+    setAiStatus('skipped')
+    renderResults()
+    return
+  }
+
+  if ('error' in response && response.error) {
+    setAiStatus('error')
+    emptyState.textContent = response.error
+    emptyState.hidden = false
+    renderResults()
+    return
+  }
+
+  if ('hits' in response && response.hits) {
+    setAiStatus('')
+    setHits(response.hits)
+    if (response.openedChat) {
+      window.close()
+    }
+  }
+}
+
 async function runSearch(query: string): Promise<void> {
   const trimmed = query.trim()
 
@@ -147,8 +219,17 @@ async function runSearch(query: string): Promise<void> {
     selectedIndex = -1
     localSearchRequestId++
     aiRequestId++
+    recommendRequestId++
     setAiStatus('')
+    emptyState.textContent = '未找到书签'
     renderResults()
+    return
+  }
+
+  if (isAskQuery(trimmed)) {
+    localSearchRequestId++
+    aiRequestId++
+    await runWebRecommend(trimmed)
     return
   }
 
@@ -187,8 +268,8 @@ async function openSelected(forceNew: boolean): Promise<void> {
   const response = (await chrome.runtime.sendMessage({
     type: 'OPEN_BOOKMARK',
     url: hit.url,
-    bookmarkId: hit.id,
-    forceNew,
+    bookmarkId: hit.source === 'local' || hit.source === 'ai' ? hit.id : undefined,
+    forceNew: forceNew || hit.source === 'web' || hit.source === 'chat',
   })) as OpenBookmarkResponse
 
   if ('ok' in response && response.ok) {
@@ -233,5 +314,6 @@ searchInput.addEventListener('keydown', (event) => {
   }
 })
 
+searchInput.placeholder = '搜索书签，或输入 ?问题 让 AI 荐站…'
 searchInput.focus()
 renderResults()

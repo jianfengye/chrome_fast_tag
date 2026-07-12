@@ -23,6 +23,17 @@
           <input type="text" id="model" name="model" value="deepseek-chat" />
         </label>
 
+        <label class="field">
+          <span class="label">默认 AI 对话框</span>
+          <input
+            type="url"
+            id="ai-chat-url"
+            name="aiChatUrl"
+            placeholder="https://chat.deepseek.com/"
+          />
+          <span class="hint">可用 {q} 占位问题，如 https://chatgpt.com/?q={q}</span>
+        </label>
+
         <div class="actions">
           <button type="button" id="save-settings" class="btn">保存</button>
           <button type="button" id="test-connection" class="btn btn-secondary">

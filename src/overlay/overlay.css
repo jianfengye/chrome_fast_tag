@@ -122,6 +122,30 @@ body {
   letter-spacing: 0.02em;
 }
 
+.web-badge {
+  flex-shrink: 0;
+  margin-top: 2px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #1d4ed8;
+  background: #dbeafe;
+  border-radius: 4px;
+  letter-spacing: 0.02em;
+}
+
+.chat-badge {
+  flex-shrink: 0;
+  margin-top: 2px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #9a3412;
+  background: #ffedd5;
+  border-radius: 4px;
+  letter-spacing: 0.02em;
+}
+
 .recent-badge {
   flex-shrink: 0;
   margin-top: 2px;

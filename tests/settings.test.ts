@@ -32,6 +32,16 @@ describe('settings', () => {
     expect(await getSettings(storage)).toEqual({
       apiKey: 'sk-test',
       model: 'deepseek-chat',
+      aiChatUrl: DEFAULT_SETTINGS.aiChatUrl,
     })
+  })
+
+  it('persists aiChatUrl', async () => {
+    await saveSettings(storage, {
+      aiChatUrl: 'https://chatgpt.com/?q={q}',
+    })
+    expect((await getSettings(storage)).aiChatUrl).toBe(
+      'https://chatgpt.com/?q={q}',
+    )
   })
 })

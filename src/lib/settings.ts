@@ -8,6 +8,7 @@ export type StorageArea = {
 export const DEFAULT_SETTINGS: Settings = {
   apiKey: '',
   model: 'deepseek-chat',
+  aiChatUrl: 'https://chat.deepseek.com/',
 }
 
 const KEY = 'fastTagSettings'
@@ -18,6 +19,7 @@ export async function getSettings(storage: StorageArea): Promise<Settings> {
   return {
     apiKey: saved?.apiKey ?? DEFAULT_SETTINGS.apiKey,
     model: saved?.model || DEFAULT_SETTINGS.model,
+    aiChatUrl: saved?.aiChatUrl || DEFAULT_SETTINGS.aiChatUrl,
   }
 }
 

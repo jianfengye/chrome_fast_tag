@@ -52,6 +52,12 @@ body {
   color: #555;
 }
 
+.hint {
+  font-size: 11px;
+  color: #888;
+  line-height: 1.4;
+}
+
 input {
   width: 100%;
   padding: 8px 10px;

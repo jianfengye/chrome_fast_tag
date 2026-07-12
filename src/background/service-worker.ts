@@ -10,11 +10,14 @@ import {
 import { selectAiCandidates } from '../lib/select-ai-candidates'
 import { chromeLocalStorage, getSettings, saveSettings } from '../lib/settings'
 import { getUsageStats, recordBookmarkOpen } from '../lib/usage-stats'
+import { buildAiChatUrl, stripAskPrefix } from '../lib/ask-mode'
+import { recommendWebsitesWithDeepSeek } from '../lib/web-recommend'
 import type { BookmarkItem, SearchHit, Settings } from '../lib/types'
 
 type RuntimeMessage =
   | { type: 'SEARCH_LOCAL'; query: string; limit?: number }
   | { type: 'SEARCH_AI'; query: string; localHits?: SearchHit[]; limit?: number }
+  | { type: 'RECOMMEND_WEB'; query: string }
   | {
       type: 'OPEN_BOOKMARK'
       url: string
@@ -26,6 +29,7 @@ type RuntimeMessage =
       type: 'SAVE_SETTINGS'
       apiKey?: string
       model?: string
+      aiChatUrl?: string
       settings?: Partial<Settings>
     }
   | { type: 'TEST_CONNECTION'; settings?: Partial<Settings> }
@@ -189,6 +193,55 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
       }
     }
 
+    case 'RECOMMEND_WEB': {
+      const settings = await getSettings(chromeLocalStorage())
+      if (!settings.apiKey) return { skipped: true }
+
+      const question = stripAskPrefix(message.query)
+      if (!question) {
+        return { error: '请输入要询问的问题' }
+      }
+
+      try {
+        const recommendations = await recommendWebsitesWithDeepSeek({
+          apiKey: settings.apiKey,
+          model: settings.model,
+          question,
+        })
+
+        if (recommendations.length === 0) {
+          const chatUrl = buildAiChatUrl(settings.aiChatUrl, question)
+          await chrome.tabs.create({ url: chatUrl })
+          return {
+            openedChat: true,
+            hits: [
+              {
+                id: 'ai-chat',
+                title: '已打开默认 AI 对话框',
+                url: chatUrl,
+                folderPath: '未找到合适网站推荐',
+                source: 'chat' as const,
+              },
+            ],
+          }
+        }
+
+        return {
+          hits: recommendations.map((item, index) => ({
+            id: `web-${index}`,
+            title: item.title,
+            url: item.url,
+            folderPath: item.reason,
+            source: 'web' as const,
+          })),
+        }
+      } catch (error) {
+        return {
+          error: error instanceof Error ? error.message : String(error),
+        }
+      }
+    }
+
     case 'OPEN_BOOKMARK':
       if (message.bookmarkId) {
         await recordBookmarkOpen(chromeLocalStorage(), message.bookmarkId)
@@ -204,6 +257,7 @@ async function handleMessage(message: RuntimeMessage): Promise<unknown> {
         ...message.settings,
         ...(message.apiKey != null ? { apiKey: message.apiKey } : {}),
         ...(message.model != null ? { model: message.model } : {}),
+        ...(message.aiChatUrl != null ? { aiChatUrl: message.aiChatUrl } : {}),
       }
       return {
         settings: await saveSettings(chromeLocalStorage(), patch),
