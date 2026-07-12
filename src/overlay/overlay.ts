@@ -35,7 +35,7 @@ function setAiStatus(status: AiStatus): void {
     statusLine.textContent = 'AI 联想中…'
     statusLine.hidden = false
   } else if (status === 'recommend') {
-    statusLine.textContent = 'AI 推荐网站中…'
+    statusLine.textContent = '未找到书签，正在为你推荐网站…'
     statusLine.hidden = false
   } else if (status === 'error') {
     statusLine.textContent = 'AI 暂不可用'
@@ -158,19 +158,36 @@ async function searchAi(
 
   if (requestId !== aiRequestId) return
 
+  const fallbackToWebRecommend = async () => {
+    // 书签无命中时，自动荐站 / 打开默认 AI 对话
+    await runWebRecommend(query)
+  }
+
   if ('skipped' in response && response.skipped) {
+    if (localHits.length === 0) {
+      await fallbackToWebRecommend()
+      return
+    }
     setAiStatus('skipped')
     renderResults()
     return
   }
 
   if ('error' in response && response.error) {
+    if (localHits.length === 0) {
+      await fallbackToWebRecommend()
+      return
+    }
     setAiStatus('error')
     renderResults()
     return
   }
 
   if ('hits' in response && response.hits) {
+    if (response.hits.length === 0) {
+      await fallbackToWebRecommend()
+      return
+    }
     setAiStatus('')
     setHits(response.hits)
   }
